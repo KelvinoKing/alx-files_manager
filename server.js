@@ -5,12 +5,15 @@
  */
 
 import express from 'express';
+import bodyParser from 'body-parser';
 import router from './routes/index';
 
 const server = express();
 const port = process.env.PORT || 5000;
 
 server.use(express.json());
+server.use(bodyParser.json({ limit: '50mb' }));
+server.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 server.use('/', router);
 
 server.listen(port, () => {
