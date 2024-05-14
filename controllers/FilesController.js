@@ -45,6 +45,7 @@
 import { ObjectId } from 'mongodb';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import mime from 'mime-types';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
 
@@ -221,6 +222,43 @@ class FilesController {
 
     await dbClient.client.db().collection('files').updateOne({ _id: ObjectId(id) }, { $set: { isPublic: false } });
     return res.status(200).send({ ...file, isPublic: false });
+  }
+
+  /**
+   * In the file routes/index.js, add one new endpoint:
+   *
+   * GET /files/:id/data => FilesController.getFile
+   * In the file controllers/FilesController.js, add the new endpoint:
+   *
+   * GET /files/:id/data should return the content of the file document based on the ID:
+   *
+   * If no file document is linked to the ID passed as parameter,
+   * return an error Not found with a status code 404
+   * If the file document (folder or file) is not public (isPublic: false)
+   * and no user authenticate or not the owner of the file,
+   * return an error Not found with a status code 404
+   * If the type of the file document is folder, return an error A
+   * folder doesn't have content with a status code 400
+   * If the file is not locally present, return an error Not found with a status code 404
+   * Otherwise:
+   * By using the module mime-types, get the MIME-type based on the name of the file
+   * Return the content of the file with the correct MIME-type
+   */
+
+  static async getFile(req, res) {
+    const { id } = req.params;
+    const file = await dbClient.client.db().collection('files').findOne({ _id: ObjectId(id) });
+
+    if (!file) return res.status(404).send({ error: 'Not found' });
+    if (!file.isPublic) return res.status(404).send({ error: 'Not found' });
+
+    if (file.type === 'folder') return res.status(400).send({ error: 'A folder doesn\'t have content' });
+
+    if (!file.localPath || !fs.existsSync(file.localPath)) return res.status(404).send({ error: 'Not found' });
+
+    const mimeType = mime.lookup(file.name);
+    res.setHeader('Content-Type', mimeType);
+    return res.sendFile(file.localPath);
   }
 }
 
